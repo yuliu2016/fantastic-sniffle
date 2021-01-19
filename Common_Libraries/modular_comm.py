@@ -9,7 +9,6 @@ import numpy as np
 
 ######################### MODULAR CONTAINER CLASS ######################### 
 
-# noinspection PyRedundantParentheses
 class comm_modular_container:
 
     # Define class-level variables   
@@ -40,6 +39,10 @@ class comm_modular_container:
     FCN_QARM_RESPONSE_ARM_BRIGHTNESS_ACK = 27
     FCN_QARM_REQUEST_GRIPPER_OBJECT_PROPERTIES = 50
     FCN_QARM_RESPONSE_GRIPPER_OBJECT_PROPERTIES = 51
+    FCN_QARM_REQUEST_END_EFFECTOR_COLLISION_SPHERE = 60
+    FCN_QARM_RESPONSE_END_EFFECTOR_COLLISION_SPHERE = 61
+    FCN_QARM_REQUEST_SEGMENT_COLLISIONS = 70
+    FCN_QARM_RESPONSE_SEGMENT_COLLISIONS = 71
     FCN_QARM_REQUEST_RGB = 100
     FCN_QARM_RESPONSE_RGB = 101
     FCN_QARM_REQUEST_DEPTH = 110
@@ -99,6 +102,10 @@ class comm_modular_container:
     ID_AUTOCLAVE = 140
     FCN_AUTOCLAVE_OPEN_DRAWER = 10
     FCN_AUTOCLAVE_OPEN_DRAWER_ACK = 11
+    
+    ID_SMARTBOX = 150
+    FCN_SMARTBOX_REQUEST_SURFACE_PROPERTIES = 5
+    FCN_SMARTBOX_RESPONSE_SURFACE_PROPERTIES = 6
     
     ID_UE4_SYSTEM = 1000
     
@@ -226,7 +233,15 @@ class comm_modular_container:
         self.device_function = self.FCN_QARM_COMMAND_ARM_BRIGHTNESS
         self.payload = bytearray(struct.pack(">f", arm_brightness))
         self.container_size = 10 + len(self.payload)
-        return self       
+        return self      
+
+    def qarm_RequestSegmentCollisions(self, device_num):
+        self.device_id = self.ID_QARM
+        self.device_number = device_num
+        self.device_function = self.FCN_QARM_REQUEST_SEGMENT_COLLISIONS
+        self.payload = bytearray()  
+        self.container_size = 10 + len(self.payload)
+        return self          
 
     def qarm_RequestGripperObjectProperties(self, device_num):
         self.device_id = self.ID_QARM
@@ -234,7 +249,16 @@ class comm_modular_container:
         self.device_function = self.FCN_QARM_REQUEST_GRIPPER_OBJECT_PROPERTIES
         self.payload = bytearray()  
         self.container_size = 10 + len(self.payload)
-        return self          
+        return self        
+
+    def qarm_RequestEndEffectorCollisionSpheres(self, device_num):
+        self.device_id = self.ID_QARM
+        self.device_number = device_num
+        self.device_function = self.FCN_QARM_REQUEST_END_EFFECTOR_COLLISION_SPHERE
+        self.payload = bytearray()  
+        self.container_size = 10 + len(self.payload)
+        return self 
+        
  
 ###### Receive Functions 
     def qarm_ResponseState(self):
@@ -286,6 +310,46 @@ class comm_modular_container:
         
         return wrist             
         
+    def qarm_ResponseSegmentCollisions(self):
+        yaw = False
+        shoulder = False
+        elbow = False
+        wrist = False
+        finger_lp = False
+        finger_ld = False
+        finger_rp = False
+        finger_rd = False
+        
+        if (len(self.payload) == 1):
+            contact_mask, = struct.unpack(">B", self.payload)
+            
+            if contact_mask & 1:
+                yaw = True
+                
+            if contact_mask & 2:
+                shoulder = True
+        
+            if contact_mask & 4:
+                elbow = True
+        
+            if contact_mask & 8:
+                wrist = True
+        
+            if contact_mask & 16:
+                finger_lp = True
+        
+            if contact_mask & 32:
+                finger_ld = True
+        
+            if contact_mask & 64:
+                finger_rp = True
+        
+            if contact_mask & 128:
+                finger_rd = True
+        
+        return yaw, shoulder, elbow, wrist, finger_lp, finger_ld, finger_rp, finger_rd
+              
+        
     def qarm_ResponseGripper(self):
         gripper = 0.0
         static_environment_collision = 0
@@ -312,7 +376,24 @@ class comm_modular_container:
             if (properties_size > 0):
                 properties = self.payload[9:(9+properties_size)].decode("utf-8")
         
-        return object_id, mass, properties         
+        return object_id, mass, properties      
+
+    def qarm_ResponseEndEffectorCollisionSpheres(self):
+        
+        target_x = 0
+        target_y = 0
+        target_z = 0
+        
+        actual_x = 0
+        actual_y = 0
+        actual_z = 0
+        
+        if (len(self.payload) == 24):
+            target_x, target_y, target_z, actual_x, actual_y, actual_z, = struct.unpack(">ffffff", self.payload)
+        
+        return target_x, target_y, target_z, actual_x, actual_y, actual_z
+        
+           
     
 ######################### QBot 2e ######################### 
 
@@ -626,6 +707,40 @@ class comm_modular_container:
         return self 
 
 ###### Receive Functions
+
+
+
+######################### Smart Box ######################### 
+
+###### Send Functions
+
+
+
+    def smartbox_Request_Surface_Properties(self, device_num):
+        self.device_id = self.ID_SMARTBOX
+        self.device_number = device_num
+        self.device_function = self.FCN_SMARTBOX_REQUEST_SURFACE_PROPERTIES
+        self.payload = bytearray()
+        self.container_size = 10 + len(self.payload)
+        return self 
+             
+
+###### Receive Functions
+    def smartbox_Response_Surface_Properties(self):
+            
+        r = 0.0
+        g = 0.0
+        b = 0.0
+        
+        metallic = 0
+        roughness = 0.0
+       
+        
+        if (len(self.payload) == 17):
+            r, g, b, metallic, roughness, = struct.unpack(">fffBf", self.payload)
+        
+        return r, g, b, metallic, roughness
+       
        
  
        

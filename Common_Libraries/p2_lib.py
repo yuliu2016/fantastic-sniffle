@@ -15,7 +15,7 @@
 # Import all required libraries
 import sys
 
-sys.path.append('../Q-Labs Python Files/QLabs Python Files/')
+sys.path.append('../')
 import numpy as np
 import time
 import os

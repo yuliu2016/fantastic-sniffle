@@ -1,7 +1,7 @@
 import sys
 import time
 import math
-sys.path.append('../Q-Labs Python Files/QLabs Python Files/')
+sys.path.append('../')
 
 from Common_Libraries.modular_comm import comm_modular_server
 from Common_Libraries.modular_comm import comm_modular_container
@@ -17,6 +17,7 @@ class postman:
     _inbox_TABLE = []
     _inbox_GENERIC_SPAWNER = []
     _inbox_AUTOCLAVE = []
+    _inbox_SMARTBOX = []
 
     def __init__(self, port):
         print ("Initializing Comm Server")
@@ -51,6 +52,8 @@ class postman:
                     self._inbox_GENERIC_SPAWNER.append(c_in)     
                 elif c_in.device_id == comm_modular_container.ID_AUTOCLAVE:
                     self._inbox_AUTOCLAVE.append(c_in)                      
+                elif c_in.device_id == comm_modular_container.ID_SMARTBOX:
+                    self._inbox_SMARTBOX.append(c_in)  
                 else:
                     self._inbox_OTHER.append(c_in)          
                     while len(self._inbox_OTHER) > 10:
@@ -80,7 +83,10 @@ class postman:
             self._inbox_GENERIC_SPAWNER = []    
         elif deviceID == comm_modular_container.ID_AUTOCLAVE:
             out = self._inbox_AUTOCLAVE
-            self._inbox_AUTOCLAVE = []              
+            self._inbox_AUTOCLAVE = []   
+        elif deviceID == comm_modular_container.ID_SMARTBOX:
+            out = self._inbox_SMARTBOX
+            self._inbox_SMARTBOX = []              
         elif deviceID > 0:
             no_match = []
             for c_inb in self._inbox_OTHER:
@@ -115,6 +121,7 @@ class postman:
         self._inbox_TABLE = []
         self._inbox_GENERIC_SPAWNER = []
         self._inbox_AUTOCLAVE = []
+        self._inbox_SMARTBOX = []
     
     #stop postman
     def close(self):

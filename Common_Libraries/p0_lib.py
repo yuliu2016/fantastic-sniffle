@@ -5,7 +5,7 @@
 import math
 import sys
 import time
-sys.path.append('../Q-Labs Python Files/QLabs Python Files/')
+sys.path.append('../')
 
 from Common_Libraries.quanser_sim_lib import QBot2e_sim, CameraUI
 from Common_Libraries.postman import postman
