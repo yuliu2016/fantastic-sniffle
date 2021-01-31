@@ -116,17 +116,17 @@ class servo_table:
             obj6 = ['blue', 'paper', empty_paper_container + random.uniform(5.0, 50.0), "Bin04"]
 
             self.container = [obj1, obj2, obj3, obj4, obj5, obj6]
+            self.material = self.container[self.obj_number][1]
 
             self.container_mass = round(self.container[self.obj_number][2],2)
             self.bin_id = self.container[self.obj_number][3]  # Added to output the bin ID.
-            return self.bin_id, self.container_mass
+            return self.material, self.container_mass, self.bin_id
         else:
             print("Enter a number between 1 and 6 (inclusive).")
 
     # dispense the bottle. Note: the container_properties method above needs to be called first to update the results
     def dispense_container(self):
         self.container_color = self.container[self.obj_number][0]
-        self.material = self.container[self.obj_number][1]
 
         if self.container_color == "red":
             color = [1, 0, 0]
@@ -265,8 +265,6 @@ class qbot:
         if type(velocity) == list:
             if float(velocity[0]) >= 0.0 and float(velocity[0]) <= 0.5 and float(velocity[1]) >=0 and float(velocity[1]) <= 0.5:
                 self.bot.set_velocity(velocity)
-            elif float(velocity[0]) < 0.0 or float(velocity[1]) < 0.0:
-                print("One or both of the inputs are negative. Enter positive input speeds.")
             elif float(velocity[0]) > 0.5 or float(velocity[1]) > 0.5:
                 print("One or both of the inputs have a speed greater than 0.5 m/s. Enter speeds less than 0.5 m/s.")
         else:
@@ -640,7 +638,7 @@ class qbot:
             # Stop the robot if the line is not found for 5 frames
             self.lost_line += 1
             if self.lost_line > 5 and max_speed != 0 :
-                self.bot.stop()
+                self.stop()
                 print("Cannot find line, QBot stopped...")
 
         delta = turn * 0.235  # QBOT_DIAMETER
