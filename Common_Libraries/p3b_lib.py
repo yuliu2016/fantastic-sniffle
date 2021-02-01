@@ -346,7 +346,7 @@ class qbot:
     # Rotates the container box angle to a specified angle position
     def rotate_actuator(self, angle):
         if self.actuator_activated == True:
-            if float(angle) > 0.0 and float(angle) <= float(120):
+            if float(angle) >= 0.0 and float(angle) <= float(120):
                 theta = math.radians(angle)
                 self.bot._set_box_angle(theta)
             elif float(angle) < float(0):
