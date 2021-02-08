@@ -1,6 +1,7 @@
 import time
 import random
 import sys
+
 sys.path.append('../')
 
 from Common_Libraries.p3b_lib import *
@@ -8,14 +9,16 @@ from Common_Libraries.p3b_lib import *
 import os
 from Common_Libraries.repeating_timer_lib import repeating_timer
 
+
 def update_sim():
     try:
         my_table.ping()
     except Exception as error_update_sim:
-        print (error_update_sim)
+        print(error_update_sim)
+
 
 ### Constants
-speed = 0.2 #Qbot's speed
+speed = 0.2  # Qbot's speed
 
 ### Initialize the QuanserSim Environment
 my_table = servo_table()
@@ -37,6 +40,7 @@ sorting station to the correct bin in the recycling station
 Authors: Yu Liu, Sabiq Mahmud
 """
 
+# =========================================
 
 """
 Simulation Configuration
@@ -142,6 +146,7 @@ Location = namedtuple("Location", "x y z")
 
 # Container Properties (as determined by container_properties)
 Container = namedtuple("Container", "material mass target_bin")
+
 
 # Note: Some functions have type annotations; they are purely
 # for readablility purposes and do not affect the program
@@ -280,6 +285,7 @@ qbot_sensors = {
     )
 }
 
+
 def transfer_container(target_bin):
     bot.read_green_color_sensor(3, 4)
 
@@ -297,7 +303,11 @@ def deposit_container():
         bot.forward_velocity(velocity)
     bot.rotate(-90)
 
+
 def return_home():
+    """
+    Follow the line to return home
+    """
     while True:
         lost_lines, velocity = bot.follow_line(0.2)
         if lost_lines > 2:
@@ -308,12 +318,51 @@ def return_home():
 
 
 def main():
-    pass
+    """
+    Main Program: Use an infinite loop to continuously
+    sort and recycle containers
+    """
+
+    # List of containers currently on the qbot
+    qbot_containers: List[Container] = []
+
+    # The state of the container on the Sorting Station
+    sorting_station_container = None
+
+    while True:
+
+        # Generate a new container, only if there isn't one
+        # already in the sorting station
+        if sorting_station_container is None:
+            new_id = random.randint(1, 6)
+            sorting_station_container = dispense_container(new_id)
+
+        load_success = load_container(qbot_containers, sorting_station_container)
+        if load_success:
+            # Container loaded onto QBot successfully
+            sorting_station_container = None
+
+            # The infinite loop gets to run immediately
+            # to attempt to load more before a trip
+            continue
+
+        # Load unsuccessful; starting the trip now
+        # Note: sorting_station_container is unchanged to
+        # prepare for the ~next~ trip.
+        destination = qbot_containers[0].target_bin
+
+        # Transfer the container to the bin
+        transfer_container(destination)
+
+        deposit_container()
+
+        return_home()
 
 
 # Call the main function to run ALL the code
 main()
+
 ##---------------------------------------------------------------------------------------
 ## STUDENT CODE ENDS
 ##---------------------------------------------------------------------------------------
-update_thread = repeating_timer(2,update_sim)
+update_thread = repeating_timer(2, update_sim)
