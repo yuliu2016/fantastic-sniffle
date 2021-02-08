@@ -64,10 +64,10 @@ Wall Height (cm):
     
 Bins:
 ===========================================
-Bin01: Red (r=1, g=0, b=0)
-Bin02: Green (r=0, g=1, b=0)
-Bin03: Blue (r=0, g=0, b=1)
-Bin04: White, Metallic
+Bin01: Red (r=1, g=0, b=0), offset=60cm
+Bin02: Green (r=0, g=1, b=0), offset=60cm
+Bin03: Blue (r=0, g=0, b=1), offset=60cm
+Bin04: White, Metallic, offset=60cm
 """
 
 # =========================================
@@ -235,6 +235,7 @@ def load_container(current_containers: List[Container],
             # A new destination requires a new trip
             return False
 
+    # Add up all the mass for the current containers
     total_mass = sum(cont.mass for cont in current_containers)
     new_mass = total_mass + new_container.mass
 
@@ -255,7 +256,10 @@ def load_container(current_containers: List[Container],
 
     # First go back to home to avoid collisions
     arm.move_arm(*home_location)
+
+    # Drop it off
     arm.move_arm(*dropoff_location)
+    arm.control_gripper(-gripper_strength)
 
     # Move back home
     arm.move_arm(*home_location)
@@ -267,41 +271,64 @@ def load_container(current_containers: List[Container],
     return True
 
 
+# A dictionary of all the sensors used for the bin
+# The key is the target bin, the value is a Sensor
+# tuple with three functions.
 qbot_sensors = {
-    "red": Sensor(
+    "Bin01": Sensor(
         activate=lambda: bot.activate_color_sensor("red"),
         read=bot.read_red_color_sensor,
-        deactivate=bot.deactivate_color_sensor
-    ),
-    "green": Sensor(
+        deactivate=bot.deactivate_color_sensor),
+    "Bin02": Sensor(
         activate=lambda: bot.activate_color_sensor("green"),
         read=bot.read_green_color_sensor,
-        deactivate=bot.deactivate_color_sensor
-    ),
-    "blue": Sensor(
+        deactivate=bot.deactivate_color_sensor),
+    "Bin03": Sensor(
         activate=lambda: bot.activate_color_sensor("blue"),
         read=bot.read_blue_color_sensor,
-        deactivate=bot.deactivate_color_sensor
-    )
+        deactivate=bot.deactivate_color_sensor),
+    "Bin04": Sensor(
+        activate=bot.activate_hall_sensor,
+        read=bot.read_hall_sensor,
+        deactivate=bot.deactivate_hall_sensor)
 }
 
 
-def transfer_container(target_bin):
-    bot.read_green_color_sensor(3, 4)
+def transfer_container(target_bin: str):
+    """
+    Move the qbot (with the containers) towards
+    a target bin
+
+    :param target_bin: the target bin id
+    """
+
+    # Get the target sensor object
+    target_sensor = qbot_sensors[target_bin]
+    # Activate that sensor
+    target_sensor.activate()
+
+    while True:
+        # Follow the yellow line
+        _, velocity = bot.follow_line(0.3)
+        bot.forward_velocity(velocity)
+
+        # Read the sensor for 0.1 seconds
+        data = target_sensor.read(target_bin, 0.1)
+
+        # Calculate the average sensor signal
+        avg = sum(data) / len(data)
+
+        # Stop once the high signal is reached
+        if avg > 4.5:
+            bot.stop()
+            break
+
+    # Deactivate the sensor
+    target_sensor.deactivate()
 
 
 def deposit_container():
-    bot.rotate(90)
-    bot.travel_forward(threshold=0.5)
-    bot.rotate(-90)
-    bot.dump()
-    bot.rotate(90)
-    while True:
-        lost_lines, velocity = bot.follow_line(0.2)
-        if lost_lines > 2:
-            break
-        bot.forward_velocity(velocity)
-    bot.rotate(-90)
+    pass
 
 
 def return_home():
@@ -309,7 +336,7 @@ def return_home():
     Follow the line to return home
     """
     while True:
-        lost_lines, velocity = bot.follow_line(0.2)
+        lost_lines, velocity = bot.follow_line(0.3)
         if lost_lines > 2:
             break
         bot.forward_velocity(velocity)
@@ -360,7 +387,12 @@ def main():
 
 
 # Call the main function to run ALL the code
-main()
+# main()
+
+# todo fix tall bottle being knocked off
+# todo fix metallic box
+# todo comment
+# todo fix return home not reaching destination
 
 ##---------------------------------------------------------------------------------------
 ## STUDENT CODE ENDS
