@@ -56,80 +56,23 @@ QBot:
 QBot Orientation After Reset (Deg): 180
 QBot Location Along Line After Reset (%): 0
 Camera Angle (Deg): -21.5 [minimum]
-Box Width (cm): 24.0
-Box Length (cm): 35.5
+Box Width (cm): 40.0
+Box Length (cm): 15.0
 Wall Height (cm):
-    Left, Right, Back: 4.0
-    Front: 11.0
-    
+    Left, Front, Back: 7.0
+    Right: 0.0 [for dumping]
+
 Bins:
 ===========================================
+Box Spacing (cm): 10
 Bin01: Red (r=1, g=0, b=0), offset=60cm
 Bin02: Green (r=0, g=1, b=0), offset=60cm
 Bin03: Blue (r=0, g=0, b=1), offset=60cm
 Bin04: White, Metallic, offset=60cm
 """
 
-# =========================================
-
-"""
-High Level Pseudocode:
-===========================================
-
-Function Dispense Container
-    Input  <- Container ID
-    Determine Container Attributes from ID
-    Dispense container in Sorting Station
-    Output -> Container Attributes
-End Function
-
-Function Load Container
-    Input  -> Container Attributes
-    If Qbot already has 3 containers
-        OR Destination is different
-        OR Total mass exceeds 90 grams
-            Exit the Function
-    Else
-        QArm picks up container from Sorting Station
-        QArm drops off container onto QBot
-End Function
-
-Function Transfer Container
-    Input -> Bin Number, Sensor Type
-    While Sensor for Bin Number not Activated
-        Move QBot forward
-End Function
-
-Function Deposit Container
-    Turn QBot towards bin
-    Move Qbot forward until a distance threshold
-    Turn QBot to Align Hopper to Bin
-    [Optional: Use File Data]
-    Rotate Hopper to Deposit
-    Move QBot Back to Yellow Line
-End Function
-
-Function Return Home
-    While not at the end of the line
-        QBot follows line in a loop
-    Rotate QBot around
-End Function
-
-Program Main
-    Initialize Environment and Reset
-    Loop Forever
-        Generate Random Container ID
-        Dispense Container
-        Load Container
-        Transfer Container
-        Deposit Container
-        Return Home
-    End Loop 
-End Program
-"""
-
 from collections import namedtuple
-from typing import List
+from typing import *
 
 # Initialize some data structures to make it easier
 # to pass data around. A "named tuple" acts like a tuple,
@@ -148,32 +91,13 @@ Location = namedtuple("Location", "x y z")
 Container = namedtuple("Container", "material mass target_bin")
 
 
-# Note: Some functions have type annotations; they are purely
-# for readablility purposes and do not affect the program
-# in any way
-
-
 def dispense_container(container_id: int) -> Container:
     """
     Retrieve the properties of a container based on the ID,
-    then dispense it onto the turn table
-
-    ID specification:
-        1 = non contaminated plastic
-        2 = non-contaminated metal
-        3 = non-contaminated paper
-        4 = contaminated plastic
-        5 = contaminated metal
-        6 = contaminated paper
-
-    :param container_id: a (randomized) id between 1 and 6
-    :return: a Container with all the properties
+    then dispense it onto the turn table, returning the
+    properties as a Container object
     """
-
-    # Get the container properties, and prepare to dispense
     material, mass, target_bin = my_table.container_properties(container_id)
-
-    # Actually dispense the container (includes 1 second delay)
     my_table.dispense_container()
 
     return Container(material, mass, target_bin)
@@ -212,18 +136,11 @@ dropoff_locations = [
 ]
 
 
-def load_container(current_containers: List[Container],
-                   new_container: Container) -> bool:
+def check_load_container(current_containers: List[Container],
+                         new_container: Container) -> bool:
+    """ Check whether the QBot can hold another container,
+    using a list of current containers on the QBot
     """
-    Check whether the QBot can hold another container. If it
-    can, then load that container onto the QBot. Modify the
-    current_containers list in-place to keep track of state
-
-    :param current_containers: list of current containers on the QBot
-    :param new_container: the new container to be added
-    :return: True if container is successfully added
-    """
-
     if len(current_containers) == 3:
         # Already enough containers; requires a new trip
         return False
@@ -243,9 +160,20 @@ def load_container(current_containers: List[Container],
         # Maximum mass exceeded; requires a new trip
         return False
 
-    # Now the actual container has to be loaded
+    return True
 
-    # Move to the pickup location and grab the spawned
+
+def load_container(current_containers: List[Container],
+                   new_container: Container) -> bool:
+    """ Check whether the QBot can hold another container.
+    If it can, then load that container onto the QBot. Modify
+    the current_containers list in-place to keep track of state.
+    """
+
+    # First check if this container can be loaded
+    if not check_load_container(current_containers, new_container):
+        return False
+
     arm.move_arm(*pickup_location)
     arm.control_gripper(gripper_strength)
 
@@ -254,39 +182,34 @@ def load_container(current_containers: List[Container],
     dropoff_index = len(current_containers)
     dropoff_location = dropoff_locations[dropoff_index]
 
-    # First go back to home to avoid collisions
     arm.move_arm(*home_location)
 
-    # Drop it off
     arm.move_arm(*dropoff_location)
     arm.control_gripper(-gripper_strength)
 
-    # Move back home
     arm.move_arm(*home_location)
 
-    # Add current container to the list
     current_containers.append(new_container)
-
-    # Success
     return True
 
 
-# A dictionary of all the sensors used for the bin
-# The key is the target bin, the value is a Sensor
-# tuple with three functions.
+# A dictionary of all the Sensors used for the bin
 qbot_sensors = {
     "Bin01": Sensor(
         activate=lambda: bot.activate_color_sensor("red"),
         read=bot.read_red_color_sensor,
         deactivate=bot.deactivate_color_sensor),
+
     "Bin02": Sensor(
         activate=lambda: bot.activate_color_sensor("green"),
         read=bot.read_green_color_sensor,
         deactivate=bot.deactivate_color_sensor),
+
     "Bin03": Sensor(
         activate=lambda: bot.activate_color_sensor("blue"),
         read=bot.read_blue_color_sensor,
         deactivate=bot.deactivate_color_sensor),
+
     "Bin04": Sensor(
         activate=bot.activate_hall_sensor,
         read=bot.read_hall_sensor,
@@ -298,8 +221,6 @@ def transfer_container(target_bin: str):
     """
     Move the qbot (with the containers) towards
     a target bin
-
-    :param target_bin: the target bin id
     """
 
     # Get the target sensor object
@@ -327,8 +248,33 @@ def transfer_container(target_bin: str):
     target_sensor.deactivate()
 
 
+def dump_angle_controlled():
+    """
+    Us
+    """
+    bot.activate_actuator()
+    rotation_time, rotation = bot.process_file("hopper_angles.txt")
+    elapsed = 0
+    for t, r in zip(rotation_time, rotation):
+        delta_t = t - elapsed
+        if delta_t > 1e-3:
+            time_before_sleep = time.time()
+            time.sleep(delta_t)
+            elapsed += time.time() - time_before_sleep
+        bot.rotate_actuator(-r)
+    bot.deactivate_actuator()
+
+
 def deposit_container():
-    pass
+    bot.rotate(90)
+    bot.travel_forward(0.22)
+    bot.rotate(-90)
+
+    dump_angle_controlled()
+
+    bot.rotate(-90)
+    bot.forward_time(2.7)
+    bot.rotate(90)
 
 
 def return_home():
@@ -344,11 +290,8 @@ def return_home():
     bot.rotate(180)
 
 
-def main():
-    """
-    Main Program: Use an infinite loop to continuously
-    sort and recycle containers
-    """
+def main_loop(id_generator: Iterator[int]):
+    """Main Program"""
 
     # List of containers currently on the qbot
     qbot_containers: List[Container] = []
@@ -361,7 +304,10 @@ def main():
         # Generate a new container, only if there isn't one
         # already in the sorting station
         if sorting_station_container is None:
-            new_id = random.randint(1, 6)
+            try:
+                new_id = next(id_generator)
+            except StopIteration:
+                break
             sorting_station_container = dispense_container(new_id)
 
         load_success = load_container(qbot_containers, sorting_station_container)
@@ -378,16 +324,33 @@ def main():
         # prepare for the ~next~ trip.
         destination = qbot_containers[0].target_bin
 
-        # Transfer the container to the bin
+        # Transfer the container to the bin, and return home
         transfer_container(destination)
-
         deposit_container()
-
         return_home()
 
+        qbot_containers.clear()
+
+
+def random_sequence():
+    """
+    Generates random containers (for program requirement)
+    """
+    while True:
+        yield random.randint(1, 6)
+
+
+def predermined_sequence():
+    """
+    Generates predetermined containers (for demonstrations)
+    """
+    yield from  [
+        2, 2, 2
+    ]
 
 # Call the main function to run ALL the code
 # main()
+main_loop(predermined_sequence())
 
 # todo fix tall bottle being knocked off
 # todo fix metallic box
