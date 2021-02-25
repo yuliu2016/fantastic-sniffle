@@ -64,7 +64,7 @@ Wall Height (cm):
 
 Bins:
 ===========================================
-Box Spacing (cm): 10
+Box Spacing (cm): 0
 Bin01: Red (r=1, g=0, b=0), offset=60cm
 Bin02: Green (r=0, g=1, b=0), offset=60cm
 Bin03: Blue (r=0, g=0, b=1), offset=60cm
@@ -101,6 +101,8 @@ def dispense_container(container_id: int) -> Container:
 
 # 30 degrees is enough to hold the container securely
 initial_gripper = 15
+arm.control_gripper(initial_gripper)
+
 toggle_gripper = 15
 
 # Base: 0, Shoulder: 50, Elbow: -35
@@ -126,22 +128,18 @@ def check_load_container(current_containers: List[Container],
     using a list of current containers on the QBot
     """
     if len(current_containers) == 3:
-        # Already enough containers; requires a new trip
         return False
 
-    if current_containers:
-        # List is not empty; Check the first item
+    if current_containers:  # Check if list is not empty
         destination = current_containers[0].target_bin
         if destination != new_container.target_bin:
-            # A new destination requires a new trip
             return False
 
-    # Add up all the mass for the current containers
-    total_mass = sum(cont.mass for cont in current_containers)
-    new_mass = total_mass + new_container.mass
+    total_mass = 0
+    for container in current_containers:
+        total_mass += container.mass
 
-    if new_mass >= 90:  # grams
-        # Maximum mass exceeded; requires a new trip
+    if total_mass + new_container.mass >= 90:  # grams
         return False
 
     return True
@@ -154,20 +152,16 @@ def load_container(current_containers: List[Container],
     the current_containers list in-place to keep track of state.
     """
 
-    # First check if this container can be loaded
     if not check_load_container(current_containers, new_container):
         return False
 
     arm.move_arm(*pickup_location)
     arm.control_gripper(toggle_gripper)
+    arm.move_arm(*home_location)
 
-    # Determine the dropoff location
-    # Index is between 0 and 2
+    # Determine the dropoff location, index between 0 and 2
     dropoff_index = len(current_containers)
     dropoff_location = dropoff_locations[dropoff_index]
-
-    # In-betweens
-    arm.move_arm(*home_location)
 
     arm.move_arm(*dropoff_location)
 
@@ -209,13 +203,13 @@ def transfer_container(target_bin: str):
     a target bin, using the specified sensor for that bin
     """
 
-    # Get the target sensor object
+    # Get the target Sensor object from the dictionary
     target_sensor = qbot_sensors[target_bin]
-    # Activate that sensor
+
     target_sensor.activate()
 
     while True:
-        # Follow the yellow line
+        # Follow the yellow line (ignoring lost_lines)
         _, velocity = bot.follow_line(0.2)
         bot.forward_velocity(velocity)
 
@@ -230,13 +224,11 @@ def transfer_container(target_bin: str):
             bot.stop()
             break
 
-    # Deactivate the sensor
     target_sensor.deactivate()
 
 
-def dump_angle_controlled():
-    """
-    Use the hopper angles provided by the modelling sub-team
+def control_model_actuator():
+    """Use the hopper angles provided by the modelling sub-team
     to control the actuator
     """
     bot.activate_actuator()
@@ -245,12 +237,14 @@ def dump_angle_controlled():
 
     for expected_time, angle in zip(rotation_time, rotation):
         delta_t = expected_time - elapsed
+
         if delta_t > 1e-3:
             # Sleep for some time until expected_time, and update elapsed
             time_before_sleep = time.time()
             time.sleep(delta_t)
             elapsed += time.time() - time_before_sleep
-        bot.rotate_actuator(-angle)
+
+        bot.rotate_actuator(-angle * 2)
 
     bot.deactivate_actuator()
 
@@ -258,11 +252,14 @@ def dump_angle_controlled():
 def deposit_container():
     """Deposit the container by rotating and travelling to
     the bin, then control it using hopper angles"""
-    bot.rotate(90)
-    bot.travel_forward(0.22)
-    bot.rotate(-90)
 
-    dump_angle_controlled()
+    # Turn slowly to avoid containers falling out
+    # using three separate calls
+    for i in range(3): bot.rotate(30)
+    bot.travel_forward(0.22)
+    for i in range(3): bot.rotate(-30)
+
+    control_model_actuator()
 
     bot.rotate(-90)
     bot.forward_time(2.7)
@@ -276,14 +273,15 @@ def return_home():
         if lost_lines > 2:
             break
         bot.forward_velocity(velocity)
+    bot.forward_time(0.4)
     bot.stop()
-    bot.rotate(180)
+    bot.rotate(90)
+    bot.rotate(95)
 
 
 def deliver_round_trip(qbot_containers: List[Container]):
-    """Call other functions to perform a round trip, delivering
-    and depositing the containers
-    """
+    """Deliver and deposit containers in a round trip"""
+
     if not qbot_containers:
         return
 
@@ -294,7 +292,7 @@ def deliver_round_trip(qbot_containers: List[Container]):
 
     transfer_container(destination)
     deposit_container()
-    qbot_containers.clear()
+    qbot_containers.clear()  # All containers are deposited
     return_home()
 
 
@@ -303,7 +301,6 @@ def main_loop(id_generator: Iterator[int]):
 
     qbot_containers: List[Container] = []
     sorting_station_container = None
-    arm.control_gripper(initial_gripper)
 
     while True:
         if sorting_station_container is None:
@@ -313,7 +310,6 @@ def main_loop(id_generator: Iterator[int]):
             try:
                 new_id = next(id_generator)
             except StopIteration:
-                deliver_round_trip(qbot_containers)  # final trip
                 break
             sorting_station_container = dispense_container(new_id)
 
@@ -326,26 +322,30 @@ def main_loop(id_generator: Iterator[int]):
             # Container left in the sorting station for next trip
             deliver_round_trip(qbot_containers)
 
+    deliver_round_trip(qbot_containers)  # final trip
+
 
 def random_sequence():
     """Sorts and recycles infinite random containers"""
     main_loop(id_generator=iter(lambda: random.randint(1, 6), 0))
 
 
-def predermined_sequence():
+def predetermined_sequence():
     """Sorts and recycles with a predetermined sequence (for demos)"""
     sequence = [
-        2, 2, 2
+        3, 3, 3
     ]
     main_loop(iter(sequence))
 
 
-# Comment out one of the sequences depending on the purpose
+def user_input_sequence():
+    main_loop(iter(lambda: int(input("(1-6 or 'q') >> ")), "q"))
+
+
+# Comment int one of the sequences depending on the purpose
 # predermined_sequence()
 # random_sequence()
-
-# todo fix metallic box
-# todo fix return home not reaching destination
+# user_input_sequence()
 
 ##---------------------------------------------------------------------------------------
 ## STUDENT CODE ENDS
