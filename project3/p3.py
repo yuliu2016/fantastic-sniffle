@@ -68,7 +68,7 @@ Box Spacing (cm): 0
 Bin01: Red (r=1, g=0, b=0), offset=60cm
 Bin02: Green (r=0, g=1, b=0), offset=60cm
 Bin03: Blue (r=0, g=0, b=1), offset=60cm
-Bin04: White, Metallic, offset=60cm
+Bin04: White, Metallic, offset=59cm
 """
 
 from collections import namedtuple
@@ -78,8 +78,9 @@ from typing import *
 
 # A sensor contains three functions: an activation function,
 # a read function (that takes in a bin id and duration),
-# and a deactivation function
-Sensor = namedtuple("Sensor", "activate read deactivate")
+# a deactivation function, and an activation time in the trip
+# (to travel smoothly before needed)
+Sensor = namedtuple("Sensor", "activate read deactivate activation_time")
 
 # An XYZ location tuple (of floats)
 Location = namedtuple("Location", "x y z")
@@ -103,19 +104,21 @@ def check_load_container(current_containers: List[Container],
     """ Check whether the QBot can hold another container,
     using a list of current containers on the QBot
     """
+    if not current_containers:
+        return True
+
     if len(current_containers) == 3:
         return False
 
-    if current_containers:  # Check if list is not empty
-        destination = current_containers[0].target_bin
-        if destination != new_container.target_bin:
-            return False
+    destination = current_containers[0].target_bin
+    if destination != new_container.target_bin:
+        return False
 
     total_mass = 0
     for container in current_containers:
         total_mass += container.mass
 
-    if total_mass + new_container.mass >= 90:  # grams
+    if total_mass + new_container.mass >= 90:
         return False
 
     return True
@@ -170,22 +173,26 @@ qbot_sensors = {
     "Bin01": Sensor(
         activate=lambda: bot.activate_color_sensor("red"),
         read=bot.read_red_color_sensor,
-        deactivate=bot.deactivate_color_sensor),
+        deactivate=bot.deactivate_color_sensor,
+        activation_time=1.75),
 
     "Bin02": Sensor(
         activate=lambda: bot.activate_color_sensor("green"),
         read=bot.read_green_color_sensor,
-        deactivate=bot.deactivate_color_sensor),
+        deactivate=bot.deactivate_color_sensor,
+        activation_time=3),
 
     "Bin03": Sensor(
         activate=lambda: bot.activate_color_sensor("blue"),
         read=bot.read_blue_color_sensor,
-        deactivate=bot.deactivate_color_sensor),
+        deactivate=bot.deactivate_color_sensor,
+        activation_time=4.25),
 
     "Bin04": Sensor(
         activate=bot.activate_hall_sensor,
         read=bot.read_hall_sensor,
-        deactivate=bot.deactivate_hall_sensor)
+        deactivate=bot.deactivate_hall_sensor,
+        activation_time=5.5)
 }
 
 
@@ -197,22 +204,24 @@ def transfer_container(target_bin: str):
     # Get the target Sensor object from the dictionary
     target_sensor = qbot_sensors[target_bin]
 
+    # Move forward until activation time (to avoid some stuttering)
+    initial_t = time.time()
+    while time.time() - initial_t < target_sensor.activation_time:
+        bot.forward_velocity(bot.follow_line(0.3)[1])
+
     target_sensor.activate()
 
     while True:
-        # Follow the yellow line (ignoring lost_lines)
-        _, velocity = bot.follow_line(0.2)
-        bot.forward_velocity(velocity)
+        # Follow the yellow line
+        bot.forward_velocity(bot.follow_line(0.2)[1])
 
         # Read sensor for 0.1 seconds, and calculate average
         data = target_sensor.read(target_bin, 0.1)
         average = sum(data) / len(data)
-
-        # Stop once the high signal is reached
-        if average > 4.5:
-            bot.stop()
+        if average > 4.5:  # High signal is reached
             break
 
+    bot.stop()
     target_sensor.deactivate()
 
 
@@ -236,10 +245,6 @@ def control_model_actuator():
         bot.rotate_actuator(-angle * 2)
 
     bot.deactivate_actuator()
-
-
-def rotate_qbot(angle: float):
-    pass
 
 
 def deposit_container():
@@ -299,7 +304,7 @@ def main_loop(id_generator: Iterator[int]):
         if sorting_station_container is None:
             # Get the next container id, or break the loop
             # if there is no more due to StopIteration;
-            # then dispense and set the new container
+            # then dispense and store the new container
             try:
                 new_id = next(id_generator)
             except StopIteration:
@@ -332,7 +337,7 @@ def predetermined_sequence():
 
 def user_input_sequence():
     """Allows the user to type in the sequence"""
-    main_loop(iter(lambda: int(input("(1-6 or 'q') >> ")), "q"))
+    main_loop(iter(lambda: int(input("(1-6 or '0' to quit) >> ")), 0))
 
 
 # Comment in one of the sequences depending on the purpose
