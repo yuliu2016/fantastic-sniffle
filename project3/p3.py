@@ -18,7 +18,7 @@ def update_sim():
 
 
 ### Constants
-speed = 0.2  # Qbot's speed
+speed = 0.1  # Qbot's speed
 
 ### Initialize the QuanserSim Environment
 my_table = servo_table()
@@ -237,20 +237,60 @@ def control_model_actuator():
     bot.deactivate_actuator()
 
 
+def rotate_qbot_smooth(
+        degree: float,
+        max_velocity=1.0,  # rad/s
+        max_accel=0.5,  # rad/s^2
+        Ks=0.002,  # Static gain constant to overcome (static) friction
+        Kv=0.005,  # Voltage gain constant to overcome dynamic drag
+):
+    """ Rotate the qbot a certain angle (in open-loop), but limit
+    its acceleration so the containers don't fall out
+    """
+    direction = degree / abs(degree)
+    angle = math.radians(abs(degree))
+
+    # Apply kinematics equations to find the total required time
+    v_max = min(max_velocity, math.sqrt(2 * angle * max_accel))
+    t_accel = v_max / max_accel
+    t_finish = t_accel + angle / v_max
+
+    t_start = time.time()
+    t_elapsed = 0
+    bot.stop()
+
+    while t_elapsed < t_finish:
+        # 3 Cases: Speed ramp-up, Speed ramp-down, cruise velocity
+        if t_elapsed < t_accel:
+            angular_speed = t_elapsed * max_accel
+        elif t_elapsed > (t_finish - t_accel):
+            angular_speed = (t_finish - t_elapsed) * max_accel
+        else:
+            angular_speed = v_max
+
+        # Convert to linear speed and apply gain constants
+        linear_speed = angular_speed * (QBOT_DIAMETER / 2 + Kv) + Ks
+
+        linear_speed *= direction
+        bot.bot.set_velocity([linear_speed, -linear_speed])
+
+        t_elapsed = time.time() - t_start
+        time.sleep(0.05)
+    bot.stop()
+
+
 def deposit_container():
     """Deposit the container by rotating and travelling to
     the bin, then control it using hopper angles"""
 
-    # Turn slowly to avoid containers falling out
-    # using three separate calls
-    for i in range(3): bot.rotate(30)
-    bot.travel_forward(0.22)
-    for i in range(3): bot.rotate(-30)
+    rotate_qbot_smooth(90)
+    bot.travel_forward(threshold=0.1)
+    rotate_qbot_smooth(-90)
 
     control_model_actuator()
 
     bot.rotate(-90)
-    bot.forward_time(2.7)
+    bot.forward_time(time=5.4)
     bot.rotate(90)
 
 
@@ -261,7 +301,7 @@ def return_home():
         if lost_lines > 2:
             break
         bot.forward_velocity(velocity)
-    bot.forward_time(0.4)
+    bot.forward_time(time=0.8)
     bot.stop()
     bot.rotate(90)
     bot.rotate(95)
