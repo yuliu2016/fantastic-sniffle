@@ -78,9 +78,8 @@ from typing import *
 
 # A sensor contains three functions: an activation function,
 # a read function (that takes in a bin id and duration),
-# a deactivation function, and an activation time in the trip
-# (to travel smoothly before needed)
-Sensor = namedtuple("Sensor", "activate read deactivate activation_time")
+# a deactivation function
+Sensor = namedtuple("Sensor", "activate read deactivate")
 
 # An XYZ location tuple (of floats)
 Location = namedtuple("Location", "x y z")
@@ -155,7 +154,7 @@ def load_container(current_containers: List[Container],
     arm.control_gripper(toggle_gripper)
     arm.move_arm(*home_location)
 
-    # Determine the dropoff location, index between 0 and 2
+    # Determine the dropoff location, index is between 0 and 2
     dropoff_location = dropoff_locations[len(current_containers)]
     arm.move_arm(*dropoff_location)
 
@@ -173,26 +172,22 @@ qbot_sensors = {
     "Bin01": Sensor(
         activate=lambda: bot.activate_color_sensor("red"),
         read=bot.read_red_color_sensor,
-        deactivate=bot.deactivate_color_sensor,
-        activation_time=1.75),
+        deactivate=bot.deactivate_color_sensor),
 
     "Bin02": Sensor(
         activate=lambda: bot.activate_color_sensor("green"),
         read=bot.read_green_color_sensor,
-        deactivate=bot.deactivate_color_sensor,
-        activation_time=3),
+        deactivate=bot.deactivate_color_sensor),
 
     "Bin03": Sensor(
         activate=lambda: bot.activate_color_sensor("blue"),
         read=bot.read_blue_color_sensor,
-        deactivate=bot.deactivate_color_sensor,
-        activation_time=4.25),
+        deactivate=bot.deactivate_color_sensor),
 
     "Bin04": Sensor(
         activate=bot.activate_hall_sensor,
         read=bot.read_hall_sensor,
-        deactivate=bot.deactivate_hall_sensor,
-        activation_time=5.5)
+        deactivate=bot.deactivate_hall_sensor)
 }
 
 
@@ -203,11 +198,6 @@ def transfer_container(target_bin: str):
 
     # Get the target Sensor object from the dictionary
     target_sensor = qbot_sensors[target_bin]
-
-    # Move forward until activation time (to avoid some stuttering)
-    initial_t = time.time()
-    while time.time() - initial_t < target_sensor.activation_time:
-        bot.forward_velocity(bot.follow_line(0.3)[1])
 
     target_sensor.activate()
 
