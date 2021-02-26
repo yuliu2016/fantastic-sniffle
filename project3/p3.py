@@ -107,10 +107,12 @@ def check_load_container(current_containers: List[Container],
         return True
 
     if len(current_containers) == 3:
+        print("Load Container: QBot already has 3 containers")
         return False
 
     destination = current_containers[0].target_bin
     if destination != new_container.target_bin:
+        print("Load Container: QBot's destination does not match")
         return False
 
     total_mass = 0
@@ -118,6 +120,7 @@ def check_load_container(current_containers: List[Container],
         total_mass += container.mass
 
     if total_mass + new_container.mass >= 90:
+        print("Load Container: Total mass exceeds 90 grams")
         return False
 
     return True
@@ -164,6 +167,7 @@ def load_container(current_containers: List[Container],
     arm.move_arm(*home_location)
 
     current_containers.append(new_container)
+    print("Load Container: Success")
     return True
 
 
@@ -211,7 +215,12 @@ def transfer_container(target_bin: str):
         if average > 4.5:  # High signal is reached
             break
 
+    if target_sensor.read == bot.read_hall_sensor:
+        # Special case for hall sensor: need to go a bit further
+        bot.forward_time(0.8)
+
     bot.stop()
+    print(f"Target Bin {target_bin} Reached")
     target_sensor.deactivate()
 
 
@@ -282,6 +291,7 @@ def rotate_qbot_smooth(
 def deposit_container():
     """Deposit the container by rotating and travelling to
     the bin, then control it using hopper angles"""
+    print("Depositing Container")
 
     rotate_qbot_smooth(90)
     bot.travel_forward(threshold=0.1)
@@ -296,6 +306,7 @@ def deposit_container():
 
 def return_home():
     """Follow the line to return home"""
+    print("Returning home")
     while True:
         lost_lines, velocity = bot.follow_line(0.3)
         if lost_lines > 2:
@@ -322,6 +333,7 @@ def deliver_round_trip(qbot_containers: List[Container]):
     deposit_container()
     qbot_containers.clear()  # All containers are deposited
     return_home()
+    print("Round trip delivered")
 
 
 def main_loop(id_generator: Iterator[int]):
@@ -357,21 +369,17 @@ def random_sequence():
     main_loop(iter(lambda: random.randint(1, 6), 0))
 
 
-def predetermined_sequence():
+def predetermined_sequence(*sequence):
     """Sorts and recycles with a predetermined sequence (for demos)"""
-    sequence = [
-        3, 3, 3
-    ]
     main_loop(iter(sequence))
 
 
 def user_input_sequence():
-    """Allows the user to type in the sequence"""
+    """Allows the user to type in the sequence (for demos)"""
     main_loop(iter(lambda: int(input("(1-6 or '0' to quit) >> ")), 0))
 
 
 # Comment in one of the sequences depending on the purpose
-# predermined_sequence()
 # random_sequence()
 # user_input_sequence()
 
