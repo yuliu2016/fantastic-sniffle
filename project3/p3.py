@@ -88,6 +88,7 @@ Location = namedtuple("Location", "x y z")
 Container = namedtuple("Container", "material mass target_bin")
 
 
+# Created-By: Yu Liu
 def dispense_container(container_id: int) -> Container:
     """Retrieve the properties of a container and dispense it """
 
@@ -98,6 +99,7 @@ def dispense_container(container_id: int) -> Container:
     return container
 
 
+# Created-By: Yu Liu
 def check_load_container(current_containers: List[Container],
                          new_container: Container) -> bool:
     """ Check whether the QBot can hold another container,
@@ -128,8 +130,6 @@ def check_load_container(current_containers: List[Container],
 
 # 30 degrees is enough to hold the container securely
 initial_gripper = 15
-arm.control_gripper(initial_gripper)
-
 toggle_gripper = 15
 
 pickup_location = Location(x=0.665, y=0.000, z=0.250)  # B=0, S=50, E=-35
@@ -143,6 +143,7 @@ dropoff_locations = [
 ]
 
 
+# Created-By: Yu Liu
 def load_container(current_containers: List[Container],
                    new_container: Container) -> bool:
     """ Check whether the QBot can hold another container.
@@ -195,6 +196,7 @@ qbot_sensors = {
 }
 
 
+# Created-By: Yu Liu
 def transfer_container(target_bin: str):
     """ Move the qbot (with the containers) towards
     a target bin, using the specified sensor for that bin
@@ -224,6 +226,7 @@ def transfer_container(target_bin: str):
     target_sensor.deactivate()
 
 
+# Created-By: Yu Liu
 def control_model_actuator():
     """Use the hopper angles provided by the modelling sub-team
     to control the actuator
@@ -241,11 +244,12 @@ def control_model_actuator():
             time.sleep(delta_t)
             elapsed += time.time() - time_before_sleep
 
-        bot.rotate_actuator(-angle * 2)
+        bot.rotate_actuator(angle)
 
     bot.deactivate_actuator()
 
 
+# Created-By: Yu Liu
 def rotate_qbot_smooth(
         degree: float,
         max_velocity=1.0,  # rad/s
@@ -288,6 +292,7 @@ def rotate_qbot_smooth(
     bot.stop()
 
 
+# Created-By: Sabiq Mahmud
 def deposit_container():
     """Deposit the container by rotating and travelling to
     the bin, then control it using hopper angles"""
@@ -304,6 +309,7 @@ def deposit_container():
     bot.rotate(90)
 
 
+# Created-By: Yu Liu
 def return_home():
     """Follow the line to return home"""
     print("Returning home")
@@ -318,6 +324,7 @@ def return_home():
     bot.rotate(95)
 
 
+# Created-By: Yu Liu
 def deliver_round_trip(qbot_containers: List[Container]):
     """Deliver and deposit containers in a round trip"""
 
@@ -336,11 +343,13 @@ def deliver_round_trip(qbot_containers: List[Container]):
     print("Round trip delivered")
 
 
+# Created-By: Yu Liu
 def main_loop(id_generator: Iterator[int]):
     """Main Program, accepting a generator of container IDs"""
 
     qbot_containers: List[Container] = []
     sorting_station_container = None
+    arm.control_gripper(initial_gripper)
 
     while True:
         if sorting_station_container is None:
@@ -362,18 +371,22 @@ def main_loop(id_generator: Iterator[int]):
             deliver_round_trip(qbot_containers)
 
     deliver_round_trip(qbot_containers)  # final trip
+    arm.control_gripper(-initial_gripper)
 
 
+# Created-By: Yu Liu
 def random_sequence():
     """Sorts and recycles infinite random containers"""
     main_loop(iter(lambda: random.randint(1, 6), 0))
 
 
+# Created-By: Yu Liu
 def predetermined_sequence(*sequence):
     """Sorts and recycles with a predetermined sequence (for demos)"""
     main_loop(iter(sequence))
 
 
+# Created-By: Yu Liu
 def user_input_sequence():
     """Allows the user to type in the sequence (for demos)"""
     main_loop(iter(lambda: int(input("(1-6 or '0' to quit) >> ")), 0))
